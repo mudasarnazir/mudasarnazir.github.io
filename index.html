@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Drive Image Batch Mover</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1020;color:#f5f7fb;margin:0}
+main{max-width:900px;margin:40px auto;padding:0 18px}
+.card{background:#121a2f;border:1px solid #2a3656;border-radius:18px;padding:18px;margin:14px 0}
+button{padding:12px 16px;border:0;border-radius:10px;font-weight:700;cursor:pointer;margin:6px;background:#2d67d7;color:#fff}
+button:disabled{opacity:.45;cursor:not-allowed}
+#move{background:#147a50}
+#status{white-space:pre-wrap;background:#17213a;padding:12px;border-radius:10px;margin-top:12px}
+#list{max-height:420px;overflow:auto;border:1px solid #2a3656;border-radius:10px;margin-top:12px}
+.row{padding:8px 10px;border-bottom:1px solid #25314f;font-size:13px}
+small{color:#aeb8cf}
+progress{width:100%;height:18px;margin-top:12px}
+</style>
+</head>
+<body>
+<main>
+<h1>Drive Image Batch Mover</h1>
+<p><small>Moves the first 800 image files directly from My Drive root into the existing folder <b>18-1-15</b>. No delete/trash operation exists in this page.</small></p>
+
+<div class="card">
+<button id="signin">1. Sign in to Google</button>
+<button id="preview" disabled>2. Preview first 800</button>
+<button id="move" disabled>3. Move 800</button>
+<div id="status">Not signed in.</div>
+<progress id="progress" max="800" value="0" hidden></progress>
+</div>
+
+<div class="card">
+<b>Selected files</b>
+<div id="summary"><small>Nothing loaded yet.</small></div>
+<div id="list"></div>
+</div>
+
+<script>
+const CLIENT_ID='791908777087-i7u977n2a2pn1o2q7qkua1blo3ss5216.apps.googleusercontent.com';
+const SCOPE='https://www.googleapis.com/auth/drive';
+const API='https://www.googleapis.com/drive/v3';
+const DEST_NAME='18-1-15';
+const LIMIT=800;
+
+let token=null, tokenClient=null, dest=null, batch=[], moving=false;
+const $=id=>document.getElementById(id);
+const status=m=>$('status').textContent=m;
+
+async function drive(path,opts={}){
+  const r=await fetch(API+path,{
+    ...opts,
+    headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',...(opts.headers||{})}
+  });
+  const t=await r.text();
+  let d=null; try{d=t?JSON.parse(t):null}catch{d=t}
+  if(!r.ok) throw new Error(d?.error?.message||('HTTP '+r.status));
+  return d;
+}
+
+$('signin').onclick=()=>{
+  if(!window.google?.accounts?.oauth2){status('Google sign-in library is still loading. Refresh and try again.');return}
+  tokenClient=google.accounts.oauth2.initTokenClient({
+    client_id:CLIENT_ID,
+    scope:SCOPE,
+    callback:r=>{
+      if(r.error){status('Sign-in failed: '+r.error);return}
+      token=r.access_token;
+      batch=[]; dest=null;
+      $('preview').disabled=false;
+      $('move').disabled=true;
+      status('Signed in. Click Preview first 800.');
+    }
+  });
+  tokenClient.requestAccessToken({prompt:'consent'});
+};
+
+async function findDest(){
+  const q=encodeURIComponent("'root' in parents and trashed = false and mimeType = 'application/vnd.google-apps.folder' and name = '"+DEST_NAME+"'");
+  const fields=encodeURIComponent('files(id,name,parents)');
+  const d=await drive('/files?q='+q+'&pageSize=10&fields='+fields);
+  if(!d.files?.length) throw new Error('Folder '+DEST_NAME+' was not found in My Drive root.');
+  if(d.files.length>1) throw new Error('More than one root folder is named '+DEST_NAME+'.');
+  return d.files[0];
+}
+
+async function listImages(){
+  let out=[], pageToken=null;
+  while(out.length<LIMIT){
+    const q=encodeURIComponent("'root' in parents and trashed = false and mimeType contains 'image/'");
+    const fields=encodeURIComponent('nextPageToken,files(id,name,mimeType,parents)');
+    let u='/files?q='+q+'&pageSize='+Math.min(1000,LIMIT-out.length)+'&fields='+fields;
+    if(pageToken)u+='&pageToken='+encodeURIComponent(pageToken);
+    const d=await drive(u);
+    out.push(...(d.files||[]));
+    pageToken=d.nextPageToken||null;
+    if(!pageToken)break;
+  }
+  return out.slice(0,LIMIT);
+}
+
+$('preview').onclick=async()=>{
+  try{
+    $('preview').disabled=true; $('move').disabled=true; $('list').innerHTML='';
+    status('Finding destination folder...');
+    dest=await findDest();
+    status('Scanning root-level images...');
+    batch=await listImages();
+    $('summary').innerHTML='<b>'+batch.length+'</b> image(s) selected → <b>'+DEST_NAME+'</b>';
+    $('list').innerHTML=batch.map((f,i)=>'<div class="row">#'+(i+1)+' — '+f.name.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))+'</div>').join('');
+    if(batch.length){
+      $('move').disabled=false;
+      status('Preview ready. Review the list, then click Move 800.');
+    }else status('No root-level images found.');
+  }catch(e){status('Preview failed: '+e.message)}
+  finally{$('preview').disabled=!token}
+};
+
+async function moveOne(f){
+  const parents=(f.parents||[]).join(',');
+  if(!parents)throw new Error('Missing source parent');
+  const p=new URLSearchParams({addParents:dest.id,removeParents:parents,fields:'id,name,parents'});
+  return drive('/files/'+encodeURIComponent(f.id)+'?'+p,{method:'PATCH',body:'{}'});
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function moveRetry(f){
+  let last;
+  for(let i=0;i<4;i++){
+    try{return await moveOne(f)}
+    catch(e){last=e;if(i===3)break;await sleep(700*Math.pow(2,i))}
+  }
+  throw last;
+}
+
+$('move').onclick=async()=>{
+  if(moving||!batch.length||!dest)return;
+  if(!confirm('Move exactly '+batch.length+' previewed images into '+DEST_NAME+'?\n\nNo files will be deleted.'))return;
+  moving=true;$('move').disabled=true;$('preview').disabled=true;$('signin').disabled=true;
+  $('progress').hidden=false;$('progress').max=batch.length;$('progress').value=0;
+  let next=0,ok=0,fail=0;
+  async function worker(){
+    while(true){
+      const i=next++; if(i>=batch.length)return;
+      try{await moveRetry(batch[i]);ok++}catch(e){fail++;console.error(batch[i].name,e)}
+      $('progress').value=ok+fail;
+      status('Moving... '+(ok+fail)+'/'+batch.length+'\nMoved: '+ok+'   Failed: '+fail);
+    }
+  }
+  await Promise.all(Array.from({length:4},worker));
+  status('Finished. Moved: '+ok+'   Failed: '+fail+(fail?'\nPreview again to retry remaining root images.':''));
+  batch=[];dest=null;moving=false;$('signin').disabled=false;$('preview').disabled=!token;
+};
+</script>
+</main>
+</body>
+</html>

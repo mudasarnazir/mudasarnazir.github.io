@@ -105,15 +105,18 @@
     <p>
       12 Goti includes an optional, free Online mode that lets two players connect using a temporary 8-character room
       code over a Supabase Realtime Broadcast channel. Online rooms are ephemeral, subject to turn timers, idle
-      timeouts, and rate limits, and are provided on an "as-available" basis without guarantee of uninterrupted
-      connectivity.
+      timeouts, outgoing message budgets (500 messages per checkpoint window), rate limits, and 50-turn stall
+      checkpoints, and are provided on an "as-available" basis without guarantee of uninterrupted connectivity.
     </p>
 
     <h2>4. Hints &amp; Advertising</h2>
     <p>
       Single-device modes include optional move hints and advertisements served by AppLovin MAX and its partners.
-      Hint credits have no monetary value, cannot be purchased, exchanged, or transferred, and exist solely as an
-      in-game feature stored locally on your device.
+      In Online mode, no banner or hint ads appear in online rooms, except (a) an opt-in rewarded video (with an
+      interstitial fallback) that a stalled online game (50 consecutive turns without a capture) asks both players to
+      watch to keep the room going—and if no video can be shown within 45 seconds, the game ends as a draw—and (b) an
+      interstitial ad that may appear when leaving a finished online game. Hint credits have no monetary value, cannot
+      be purchased, exchanged, or transferred, and exist solely as an in-game feature stored locally on your device.
     </p>
 
     <h2>5. Intellectual Property</h2>

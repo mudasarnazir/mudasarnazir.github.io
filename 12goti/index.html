@@ -88,7 +88,7 @@
       <li><strong>No Accounts:</strong> 12 Goti does not require or offer user registration, login accounts, profiles, or cloud saves.</li>
       <li><strong>Offline Play Collects Nothing:</strong> Single-device play (vs Computer and 2-player pass-and-play) runs entirely on your device and sends no gameplay data over the network.</li>
       <li><strong>Optional Online Rooms:</strong> If you open Online mode to play with a friend using an 8-character room code, moves are relayed transiently over a Supabase Realtime Broadcast channel. No accounts are created and no moves or games are stored in any database; standard WebSocket connection metadata (such as your IP address) is visible to the relay server during the session.</li>
-      <li><strong>Ad-Supported (Offline Modes Only):</strong> In builds with advertising enabled, we display ads via <strong>AppLovin MAX</strong> and its mediation partners. Ads never appear in an online room.</li>
+      <li><strong>Ad-Supported:</strong> In builds with advertising enabled, we display ads via <strong>AppLovin MAX</strong> and its mediation partners in single-device modes. No banner or other ads appear in online rooms, except (a) an opt-in rewarded video (with an interstitial fallback) that a stalled online game (50 turns without a capture) asks both players to watch to keep the room going—and if no video can be shown within 45 seconds, the game ends as a draw—and (b) an interstitial ad that may appear when leaving a finished online game.</li>
       <li><strong>Age Rating (13+):</strong> 12 Goti is intended for a general audience aged <strong>13 and older</strong> and is not directed to children under 13. The App does not participate in Apple Kids or Google Play Families programs.</li>
     </ul>
 
@@ -112,7 +112,7 @@
     </p>
     <ul>
       <li>Your device connects over TLS WebSockets to a <strong>Supabase Realtime Broadcast</strong> channel derived from the room code.</li>
-      <li>Only game protocol messages (handshake, turn number, board move coordinates, rematch/draw/resign signals) are broadcast between the two devices in the room.</li>
+      <li>Only signed game protocol messages (handshake, turn number, board move coordinates, rematch/draw/resign signals, and stall-checkpoint status signals) are broadcast between the two devices in the room.</li>
       <li>No user names, email addresses, device identifiers, or chat messages are transmitted, and no moves or match histories are written to any database table.</li>
       <li>As with any internet connection, the relay infrastructure (Supabase / Cloudflare) processes standard network connection data such as your <strong>IP address</strong> and connection timestamps to route the WebSocket traffic and enforce rate limits.</li>
     </ul>
@@ -121,7 +121,11 @@
     <p>
       To keep 12 Goti free, single-device modes display banner, interstitial, and optional rewarded ads (for hints)
       through the <strong>AppLovin MAX</strong> SDK and its mediated ad networks. Ads are never initialized or
-      requested until after you accept the in-app Terms &amp; Privacy notice, and ads are never shown in Online mode.
+      requested until after you accept the in-app Terms &amp; Privacy notice. In Online mode, no banner or hint ads
+      appear in online rooms, except (a) an opt-in rewarded video (with an interstitial fallback) that a stalled online
+      game (50 consecutive turns without a capture) asks both players to watch to keep the room going—and if no video
+      can be shown within 45 seconds, the game ends as a neutral draw—and (b) an interstitial ad that may appear when
+      leaving a finished online game (for example on Rematch, Leave room, or New game).
     </p>
     <p>
       Depending on your platform and privacy choices, AppLovin MAX and its partners may collect or process:
